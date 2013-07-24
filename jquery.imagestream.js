@@ -25,6 +25,7 @@
             maxBufferSize: 20,
             minBufferSize: 10,
             resizeWait: 500,
+            adaptive: true,
             sequenceByWidth: function (imageWidth) {
                 return (imageWidth > 1000) ? 0 : 1;
             }
@@ -319,7 +320,7 @@
                             // if hitting end of buffer, wait until it grows to minBufferSize if can't switch resolution,
                             // or switch to lower resolution and wait until all previously buffered higher resolution images are done loading
                             self.element.trigger("buffering");
-                            if (self._updateSequence(self._state.sequence + 1)) {
+                            if (self.options.adaptive && self._updateSequence(self._state.sequence + 1)) {
                                 waitBuffer.call(self, self.options.frame, self.options.frame + self._state.bufferSize - 1);
                             } else {
                                 waitBuffer.call(self, self.options.frame, Math.min(self.options.frame + self.options.minBufferSize - 1, to));
