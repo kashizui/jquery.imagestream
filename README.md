@@ -43,39 +43,46 @@ You can easily override them (and are in fact encouraged to) by passing in optio
 
 ```js
 imageStream.options = {
-      // The array of image path definitions, ordered from highest resolution to lowest (though 
-      // Image Stream wouldn't know the difference).
-      // Each definition is either in the form of a callback function--which takes a zero-indexed frame number
-      // as an integer and returns a string--or an explicit array of strings.
+      // The array of image path definitions, ordered from highest resolution to lowest
+      // (though Image Stream wouldn't know the difference).
+      // Each definition is either in the form of a callback function--which takes a
+      // zero-indexed frame number as an integer and returns a string--or an explicit
+      // array of strings.
       sequences: [],
-      // The number of frames in the animation. Must be specified if using a callback function for 
-      // sequence definition, otherwise defaults to the length of the first explicit list.
+      // The number of frames in the animation. Must be specified if using a callback
+      // function for sequence definition, otherwise defaults to the length of the first
+      // explicit list.
       numFrames: null,
-      // The size of the container. This value should be an object with numeric "width" and "height" properties.
+      // The size of the container. This value should be an object with numeric "width"
+      // and "height" properties.
       // Defaults to the CSS size of the element right before initialization of Image Stream. 
       containerSize: null,
       // Size of the images inside the container. Same format as containerSize.
       // Defaults to the size of the container element after the above defaults are applied.
       size: null,
-      // Offset of the images inside the container. This value should be an boject with numeric "x" and "y"
-      // properties.
+      // Offset of the images inside the container. This value should be an boject with
+      // numeric "x" and "y" properties.
       offset: {x: 0, y: 0},
       // The frame to display first (zero-indexed).
       frame: 0,
       // The speed of the animation in frames per second.
       fps: 12,
-      // The maximum number of images to keep in buffer at any given time. Can be arbitrarily large.
+      // The maximum number of images to keep in buffer at any given time. Can be
+      // arbitrarily large.
       maxBufferSize: 20,
       // The minimum number of images to buffer before starting animation on play.
       minBufferSize: 10,
-      // If true, will apply adaptive streaming, otherwise, stay on the same sequence throughout animation.
+      // If true, will apply adaptive streaming, otherwise, stay on the same sequence
+      // throughout animation.
       adaptive: true,
-      // Callback function that returns the index of the sequence to switch to given a new image width after resize.
+      // Callback function that returns the index of the sequence to switch to given a new
+      // image width after resize.
       // Default always uses first sequence in sequences array.
       sequenceByWidth: function (imageWidth) {
           return 0;
       },
-      // ADVANCED: Number of milliseconds to wait after resizing the images to detect need for sequence change. 
+      // ADVANCED: Number of milliseconds to wait after resizing the images to detect need
+      // for sequence change. 
       resizeWait: 500
 }
 ```
