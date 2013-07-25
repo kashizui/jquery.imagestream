@@ -10,26 +10,40 @@
 
         // Default options
         options: {
-            sequences: [ // provided in order from highest resolution to lowest
-                // generate image paths by callback
-                function (frameNumber) { return '/pics/hiphop/dancing' + frameNumber + '.jpg'; },
-                // or provide an explicit list
-                ["/pics/hiphop/dancing0.jpg", "/pics/hiphop/dancing1.jpg", "/pics/hiphop/dancing2.jpg"]
-            ],
-            numFrames: 10,
-            frame: 0,
-            fps: 12,
-            containerSize: {width: 500, height: 500},
-            size: null, // defaults to the size of the container element
+            // The array of image path definitions, ordered from highest resolution to lowest (though 
+            // Image Stream wouldn't know the difference).
+            // Each definition is either in the form of a callback function--which takes a zero-indexed frame number
+            // as an integer and returns a string--or an explicit array of strings.
+            sequences: [],
+            // The number of frames in the animation. Must be specified if using a callback function for 
+            // sequence definition, otherwise defaults to the length of the first explicit list.
+            numFrames: null,
+            // The size of the container. This value should be an object with numeric "width" and "height" properties.
+            // Defaults to the CSS size of the element right before initialization of Image Stream. 
+            containerSize: null,
+            // Size of the images inside the container. Same format as containerSize.
+            // Defaults to the size of the container element after the above defaults are applied.
+            size: null,
+            // Offset of the images inside the container. This value should be an boject with numeric "x" and "y"
+            // properties.
             offset: {x: 0, y: 0},
+            // The frame to display first (zero-indexed).
+            frame: 0,
+            // The speed of the animation in frames per second.
+            fps: 12,
+            // The maximum number of images to keep in buffer at any given time. Can be arbitrarily large.
             maxBufferSize: 20,
+            // The minimum number of images to buffer before starting animation on play.
             minBufferSize: 10,
-            resizeWait: 500,
+            // If true, will apply adaptive streaming, otherwise, stay on the same sequence throughout animation.
             adaptive: true,
+            // Callback function that returns the index of the sequence to switch to given a new image width after resize.
+            // Default always uses first sequence in sequences array.
             sequenceByWidth: function (imageWidth) {
-                return (imageWidth > 1000) ? 0 : 1;
-            }
-
+                return 0;
+            },
+            // ADVANCED: Number of milliseconds to wait after resizing the images to detect need for sequence change. 
+            resizeWait: 500
         },
 
         _create: function () {
@@ -49,6 +63,13 @@
             this._state.$canvas = $("<canvas></canvas").appendTo(this.element);
             this._state.ctx = this._state.$canvas.get(0).getContext('2d');
 
+            // get current size of container if not specified in options
+            if (this.options.containerSize === null) {
+                this.options.containerSize = {
+                    width: this.element.css("width"),
+                    height: this.element.css("height")
+                };
+            }
             // default image size matches the container size
             if (this.options.size === null) { 
                 this.options.size = this.options.containerSize;
@@ -65,8 +86,13 @@
                     if (typeof testPath !== 'string') {
                         throw new Error("The callback function must accept an integer as argument and return a string.");
                     }
+                    if (typeof this.options.numFrames !== 'number') {
+                        throw new Error("numFrames must be specified if using a callback function for sequence definition.");
+                    }
                 } else if (sequence instanceof Array) {
-                    if (sequence.length < this.options.numFrames) {
+                    if (this.options.numFrames == null) {
+                        this.options.numFrames = sequence.length;
+                    } else if (sequence.length < this.options.numFrames) {
                         throw new Error("The explicit array of images (sequences[" + i + "]) is smaller than the specified number of frames.");
                     }
                     // normalize into a function as well TODO: confirm that this works
@@ -87,6 +113,9 @@
         },
 
         _setOption: function(key, value) {
+            if (value === undefined || value === null) {
+                return this.options[key];
+            }
             switch (key) {
             case "size":
                 this.options[key] = value;
