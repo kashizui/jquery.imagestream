@@ -167,18 +167,21 @@
         },
 
         _updateSequence: function(newSequence) {
-            // Calculate and normalize the new sequence id
+            // Calculate new sequence id based on width if none provided
             if (newSequence === undefined || newSequence === null) {
                 newSequence = this.options.sequenceByWidth(this.options.size.width);
             }
+            // Bound sequence id
             if (newSequence >= this.options.sequences.length) {
                 newSequence = this.options.sequences.length - 1;
             } else if (newSequence < 0) {
                 newSequence = 0;
             }
-            if (this._state.sequence === newSequence) {
+            // No need to let resolution decrease if better resolution image already loaded
+            if (this._state.sequence <= newSequence) {
                 return false; // just return false if unchanged
             }
+            
             this._state.sequence = newSequence; 
 
             if (!this._state.playing) {
