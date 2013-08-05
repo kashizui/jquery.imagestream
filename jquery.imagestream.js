@@ -52,7 +52,7 @@
                 "$bufferContainer": $("<div></div>").hide().appendTo(this.element),
                 "$currentImage": $("<img />"),
                 "bufferSize": 0,
-                "sequence": -1,
+                "sequence": Infinity,
                 "buffer": {},
                 "playing": false,
                 "aniTimer": null,
@@ -135,10 +135,11 @@
                 break;
             case "frame":
                 if (value !== this.options.frame && value >= 0 && value < this.options.numFrames) {
-                    this.options[key] = value;
                     if (this._state.playing) {
                         this.pause();
                     }
+                    this.options[key] = value;
+                    this._updateSequence(null, true); // reset
                     this._resetFrame();
                 }
                 break;
@@ -166,7 +167,7 @@
             }
         },
 
-        _updateSequence: function(newSequence) {
+        _updateSequence: function(newSequence, reset) {
             // Calculate new sequence id based on width if none provided
             if (newSequence === undefined || newSequence === null) {
                 newSequence = this.options.sequenceByWidth(this.options.size.width);
@@ -178,7 +179,10 @@
                 newSequence = 0;
             }
             // No need to let resolution decrease if better resolution image already loaded
-            if (this._state.sequence <= newSequence) {
+            if (!reset && this._state.sequence < newSequence) {
+                return false;
+            }
+            if (this._state.sequence === newSequence) {
                 return false; // just return false if unchanged
             }
             
