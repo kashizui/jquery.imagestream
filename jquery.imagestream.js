@@ -125,7 +125,7 @@
                     window.clearTimeout(this._state.resizeTimer);
                     var self = this;
                     this._state.resizeTimer = window.setTimeout(function() {
-                        self._updateSequence();
+                        self._updateSequence(null, true); // prevent downgrade
                     }, this.options.resizeWait);
                 }
                 break;
@@ -139,7 +139,7 @@
                         this.pause();
                     }
                     this.options[key] = value;
-                    this._updateSequence(null, true); // reset
+                    this._updateSequence();
                     this._resetFrame();
                 }
                 break;
@@ -149,9 +149,10 @@
                 this._refreshImage;
                 break;
             case "numFrames":
+                // First confirm that the sequences can be extended as specified.
                 var numSequences = this.options.sequences.length;
                 for (var i = 0; i < numSequences; i++) {
-                    var sequence = this.options.sequence[i];
+                    var sequence = this.options.sequences[i];
                     if (sequence.hasOwnProperty('images') && sequence.images.length < value) {
                         throw new Error("explicit array of images not big enough for new numFrames.");
                     }
@@ -167,7 +168,7 @@
             }
         },
 
-        _updateSequence: function(newSequence, reset) {
+        _updateSequence: function(newSequence, preventDowngrade) {
             // Calculate new sequence id based on width if none provided
             if (newSequence === undefined || newSequence === null) {
                 newSequence = this.options.sequenceByWidth(this.options.size.width);
@@ -179,7 +180,7 @@
                 newSequence = 0;
             }
             // No need to let resolution decrease if better resolution image already loaded
-            if (!reset && this._state.sequence < newSequence) {
+            if (preventDowngrade && this._state.sequence < newSequence) {
                 return false;
             }
             if (this._state.sequence === newSequence) {
