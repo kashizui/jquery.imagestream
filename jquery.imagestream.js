@@ -15,6 +15,10 @@
             // Each definition is either in the form of a callback function--which takes a zero-indexed frame number
             // as an integer and returns a string--or an explicit array of strings.
             sequences: [],
+            // Average file sizes of the images for each sequence, in bytes.
+            bytes: [],
+            // Path to placeholder image, which is displayed when frame is set to -1.
+            placeholder: "/placeholder.png",
             // The number of frames in the animation. Must be specified if using a callback function for 
             // sequence definition, otherwise defaults to the length of the first explicit list.
             numFrames: null,
@@ -24,7 +28,7 @@
             // Size of the images inside the container. Same format as containerSize.
             // Defaults to the size of the container element after the above defaults are applied.
             size: null,
-            // Offset of the images inside the container. This value should be an boject with numeric "x" and "y"
+            // Offset of the images inside the container. This value should be an object with numeric "x" and "y"
             // properties.
             offset: {x: 0, y: 0},
             // The frame to display first (zero-indexed).
@@ -58,7 +62,8 @@
                 "aniTimer": null,
                 "resizeTimer": null,
                 "$canvas": null,
-                "ctx": null
+                "ctx": null,
+                "dlSpeed": Infinity,
             };
             this._state.$canvas = $("<canvas></canvas").appendTo(this.element);
             this._state.ctx = this._state.$canvas.get(0).getContext('2d');
@@ -134,7 +139,7 @@
                 this._refreshImage();
                 break;
             case "frame":
-                if (value !== this.options.frame && value >= 0 && value < this.options.numFrames) {
+                if (value !== this.options.frame && value >= -1 && value < this.options.numFrames) {
                     if (this._state.playing) {
                         this.pause();
                     }
@@ -159,8 +164,9 @@
                 }
                 this.options[key] = value;
                 break;
+            case "bytes":
             case "sequences":
-                throw new Error("You cannot modify the sequences definitions after initializing the image stream (yet).");
+                throw new Error("You cannot modify \"" + key + "\" after initialization.");
                 break;
             default:
                 this.options[key] = value;
@@ -187,6 +193,7 @@
                 return false; // just return false if unchanged
             }
             
+            // console.log("update to", newSequence);
             this._state.sequence = newSequence; 
 
             if (!this._state.playing) {
@@ -231,23 +238,35 @@
          * Fires a request to preload an image and places the new image element in the buffer.
          */
         _loadImage: function(seqNum) {
-            if (this._state.buffer[seqNum]) {
+            var state = this._state;
+            var options = this.options;
+
+            if (state.buffer[seqNum]) {
                 return; // if already in buffer, ignore load request.
             }
+
             var $img = $(new Image());
 
             // Set "done" flag when image is done loading
+            var startTime = new Date().getTime(); // we don't need anything better than 15 ms precision
+            var seq = state.sequence; // save current sequence
             $img.on("load", function() {
+                state.dlSpeed = options.bytes[seq] / (new Date().getTime() - startTime);
                 $img.data("done", true);
             });
             // Preload image
+            if (seqNum === -1) {
+                $img.attr("src", options.placeholder);
+            } else {
+                $img.attr("src", options.sequences[seq](seqNum));
+            }
             // force some recalcitrant browsers to actually load the images by setting a size
-            $img.attr("src", this.options.sequences[this._state.sequence](seqNum)).css({height:"1px", width:"1px"}).data("done", false);
+            $img.css({height:"1px", width:"1px"}).data("done", false);
 
             // "cache" in a container
-            this._state.$bufferContainer.append($img);
-            this._state.buffer[seqNum] = $img;
-            this._state.bufferSize++;
+            state.$bufferContainer.append($img);
+            state.buffer[seqNum] = $img;
+            state.bufferSize++;
         },
 
         /*
@@ -262,7 +281,7 @@
 
             if ($img) {
                 if ($img.data("done") === true) {
-                    callback.call(this, false /*isDelayed*/);
+                    callback.call(this, false);
                 } else {
                     var self = this;
                     $img.on("load", function() {
@@ -289,6 +308,7 @@
         _refreshImage: function() {
             var offset = this.options.offset;
             var size = this.options.size;
+            this._state.ctx.clearRect(0, 0, this._state.$canvas.width(), this._state.$canvas.height());
             this._state.ctx.drawImage(this._state.$currentImage[0], offset.x, offset.y, size.width, size.height);
         },
 
@@ -301,73 +321,104 @@
          *      to - the last frame in the sequence
          */
         play: function(from, to) {
-            this.element.trigger("play");
-            this._state.playing = true;
+            var state, options, element, self,
+                nextFrame, lastTime, frameInterval, speeds, numSpeeds, i, bufferEnd;
+
+            state = this._state;
+            options = this.options;
+            element = this.element;
+            self = this;
+
             // validation and defaults
             if (from === undefined || from === null) {
-                var nextFrame = this.options.frame + 1;
-                from = (nextFrame >= this.options.numFrames) ? 0 : nextFrame;
+                nextFrame = options.frame + 1;
+                from = (nextFrame >= options.numFrames) ? 0 : nextFrame;
             }
             if (to === undefined || to === null) {
-                to = this.options.numFrames - 1;
+                to = options.numFrames - 1;
             }
 
             // the meat
-            var lastTime = new Date().getTime();
-            this.options.frame = from;
+            element.trigger("play");
+            state.playing = true;
+            options.frame = from;
+            lastTime = new Date().getTime();
+            frameInterval = 1000 / options.fps;
+
+            // Compute download speeds necessary based on current fps
+            speeds = [];
+            numSpeeds = options.bytes.length
+            for (i = 0; i < numSpeeds; i++) {
+                speeds.push(options.bytes[i] / frameInterval);
+                // console.log(i, speeds[i]*(7.62939e-3), "Mbps");
+            }
 
             // Fire off loading for the first maxBufferSize images.
-            this.element.trigger("buffering");
-            var bufferEnd = Math.min(from + this.options.maxBufferSize - 1, to);
-            for (var i = from; i <= bufferEnd; i++) {
+            element.trigger("buffering");
+            bufferEnd = Math.min(from + options.maxBufferSize - 1, to);
+            for (i = from; i <= bufferEnd; i++) {
                 this._loadImage(i);
             }
-            waitBuffer.call(this, from, Math.min(from + this.options.minBufferSize - 1, to));
+            waitBuffer(from, Math.min(from + options.minBufferSize - 1, to));
 
             // Helper functions
             /* Calls stepAnimation only after all the images in the specified range have been loaded. */
             function waitBuffer(waitStart, waitEnd) {
                 if (waitStart === waitEnd) {
-                    this._joinImageLoad(waitEnd, stepAnimation);
+                    self._joinImageLoad(waitEnd, function () {
+                        stepAnimation(false);
+                    });
                 } else {
-                    this._joinImageLoad(waitStart, function() {
-                        waitBuffer.call(this, waitStart + 1, waitEnd); // recursively wait for the next image
+                    self._joinImageLoad(waitStart, function() {
+                        waitBuffer(waitStart + 1, waitEnd); // recursively wait for the next image
                     });
                 }
             }
             /* Displays the current frame in the animation, continues firing off buffer requests, and then recurses after the next image or the buffer is loaded. */
             function stepAnimation(isDelayed) {
-                this._displayFrame();
-                if (this.options.frame < to) {
-                    // fire off loading if buffer is under maxBufferSize
-                    bufferEnd = Math.min(to, this.options.frame + this.options.maxBufferSize - this._state.bufferSize);
-                    for (var i = this.options.frame + this._state.bufferSize + 1; i <= bufferEnd; i++) {
-                        this._loadImage(i);
+                var bufferEnd, i;
+
+                self._displayFrame();
+                if (options.frame < to) {
+                    // fire off loaders to mabntain buffer
+                    bufferEnd = Math.min(to, options.frame + options.maxBufferSize - state.bufferSize);
+                    for (i = options.frame + state.bufferSize + 1; i <= bufferEnd; i++) {
+                        self._loadImage(i);
                     }
-                    // Calculate time left in the current frame interval
-                    var elapsed = (new Date().getTime() - lastTime);
-                    var frameInterval = 1000 / this.options.fps;
-                    var timeLeft = (elapsed > frameInterval) ? 0 : frameInterval - elapsed;
-                    // Wait for time for next frame
-                    var self = this;
-                    this._state.aniTimer = window.setTimeout(function() {
+
+                    // Wait until it's time for the next frame.
+                    state.aniTimer = window.setTimeout(function() {
+                        var idx;
+
+                        options.frame++;
                         lastTime = new Date().getTime();
-                        self.options.frame++;
-                        if (isDelayed) {
-                            // if hitting end of buffer, wait until it grows to minBufferSize if can't switch resolution,
-                            // or switch to lower resolution and wait until all previously buffered higher resolution images are done loading
-                            self.element.trigger("buffering");
-                            if (self.options.adaptive && self._updateSequence(self._state.sequence + 1)) {
-                                waitBuffer.call(self, self.options.frame, self.options.frame + self._state.bufferSize - 1);
+
+                        // Adaptive streaming computations
+                        if (options.adaptive) {
+                            if (numSpeeds) {
+                                // console.log(state.dlSpeed*(7.62949e-3) + " Mbps");
+                                // Determine appropriate resolution by download speed
+                                for (idx = 0; idx < numSpeeds; idx++) {
+                                    if (state.dlSpeed > speeds[idx]) break;
+                                }
+
+                                // resolution could be better XOR last image load delayed
+                                if ((idx < state.sequence) !== isDelayed) {
+                                    self._updateSequence(Math.max(options.sequenceByWidth(options.size.width), idx));
+                                }
+
                             } else {
-                                waitBuffer.call(self, self.options.frame, Math.min(self.options.frame + self.options.minBufferSize - 1, to));
+                                // dumb method:
+                                // bump down resolution if hit end of buffer
+                                if (isDelayed) self._updateSequence(state.sequence + 1);
                             }
-                        } else {
-                            self._joinImageLoad(self.options.frame, stepAnimation);
                         }
-                    }, timeLeft);
+
+                        self._joinImageLoad(options.frame, stepAnimation);
+
+                    }, Math.max(0, frameInterval - (new Date().getTime() - lastTime)));
                 } else {
-                    this.pause();
+                    self.pause();
                 }
             }
         },
@@ -395,5 +446,6 @@
             this._setOption("frame", seqNum);
         }
     });
+
 
 })(jQuery);
